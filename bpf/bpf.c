@@ -1,23 +1,31 @@
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
 #include <linux/swab.h>
 #include <sys/socket.h>
 #include "include/helpers.h"
 
 #define ETH_P_IP 0x0800 /* Internet Protocol Packet */
+#define PROTO_TCP 6
+#define PROTO_UDP 17
 
-struct sourcedest {
+struct packetdets {
     __u32 source;
+    __u16 source_port;
     __u32 dest;
-    __u32 port;
+    __u16 dest_port;
+    __u8 ip_protocol;
 };
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, struct sourcedest);
+    __type(key, struct packetdets);
     __type(value, __u64);
     __uint(max_entries, 1000);
 } pkt_count SEC(".maps");
@@ -29,6 +37,8 @@ int tc_main(struct __sk_buff *skb)
     void *data = (void *)(__u64)skb->data;
     struct ethhdr *eth;
     struct iphdr *ip;
+    struct tcphdr *tcp;
+    struct udphdr *udp;
 
     if (skb->protocol != bpf_htons(ETH_P_IP))
         return TC_ACT_OK;
@@ -43,11 +53,37 @@ int tc_main(struct __sk_buff *skb)
 
     __u32 source = bpf_ntohl(ip->addrs.saddr);
     __u32 dest = bpf_ntohl(ip->addrs.daddr);
-    __u32 port = 0;
-    struct sourcedest key = {
+
+    //extract the port from tcp or ip headers
+    __u16 source_port;
+    __u16 dest_port;
+    __u8 ip_proto;
+    if (ip->protocol == PROTO_TCP) {
+        tcp = (void *)ip + sizeof(struct iphdr);
+        if ((void *)tcp + sizeof(struct tcphdr) > data_end) {
+            return TC_ACT_OK;
+        }
+        source_port = tcp->source;
+        dest_port = tcp->source;
+        ip_proto = PROTO_TCP;
+    } else if (ip->protocol == PROTO_UDP) {
+        udp = (void *)ip + sizeof(struct iphdr);
+        if ((void *)udp + sizeof(struct udphdr) > data_end) {
+            return TC_ACT_OK;
+        }
+        source_port = udp->source;
+        dest_port = udp->dest;
+        ip_proto = PROTO_UDP;
+    } else {
+        return TC_ACT_OK;
+    }
+
+    struct packetdets key = {
         .source = source,
+        .source_port = source_port,
         .dest = dest,
-        .port = port,
+        .dest_port = dest_port,
+        .ip_protocol = ip_proto,
     };
     __u64 *count = bpf_map_lookup_elem(&pkt_count, &key);
     if (count) {

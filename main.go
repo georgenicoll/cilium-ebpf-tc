@@ -96,13 +96,16 @@ func main() {
 			log.Printf("==========")
 			var (
 				entries    = pktCount.Iterate()
-				sourcedest tcSourcedest
+				packetdets tcPacketdets
 				count      uint64
 			)
-			for entries.Next(&sourcedest, &count) {
-				source := InttoIP4(sourcedest.Source)
-				dest := InttoIP4(sourcedest.Dest)
-				log.Printf("%s -> %s: %d", source, dest, count)
+			for entries.Next(&packetdets, &count) {
+				source := InttoIP4(packetdets.Source)
+				source_port := packetdets.SourcePort
+				dest := InttoIP4(packetdets.Dest)
+				dest_port := packetdets.DestPort
+				ip_protocol := packetdets.IpProtocol
+				log.Printf("%s[%d] -> %s[%d] proto %d: %d", source, source_port, dest, dest_port, ip_protocol, count)
 			}
 			log.Printf("")
 		case <-stop:
