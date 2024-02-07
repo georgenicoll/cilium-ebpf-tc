@@ -1,14 +1,9 @@
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <linux/if_ether.h>
-#include <linux/if_packet.h>
-#include <linux/in.h>
 #include <linux/ip.h>
-#include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
-#include <linux/swab.h>
-#include <sys/socket.h>
 #include "include/helpers.h"
 
 #define ETH_P_IP 0x0800 /* Internet Protocol Packet */
