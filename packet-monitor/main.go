@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go tc bpf/bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go tc ../bpf/packet-monitor-bpf.c -- -I../bpf
 
 func InttoIP4(ipInt uint32) string {
 	// need to do two bit shifting and “0xff” masking
@@ -36,7 +36,7 @@ func main() {
 	}
 	defer objs.Close()
 
-	progFd := objs.TcMain.FD()
+	progFd := objs.PacketMonMain.FD()
 
 	intf, err := netlink.LinkByName(INTERFACE)
 	if err != nil {
