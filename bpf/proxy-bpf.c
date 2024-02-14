@@ -42,7 +42,7 @@ int proxy_egress(struct __sk_buff *skb)
     void *data = (void *)(__u64)skb->data;
     struct ethhdr *eth;
     struct iphdr *ip;
-    struct tcphdr *tcp;
+    //struct tcphdr *tcp;
     struct udphdr *udp;
 
     if (skb->protocol != bpf_htons(ETH_P_IP))
@@ -59,17 +59,17 @@ int proxy_egress(struct __sk_buff *skb)
     __u32 source = bpf_ntohl(ip->addrs.saddr);
     __u32 dest = bpf_ntohl(ip->addrs.daddr);
 
-    //extract the port from tcp or ip headers
+    //extract the port from tcp or udp headers
     __u16 source_port;
     __u16 dest_port;
-    if (ip->protocol == PROTO_TCP) {
+    /*if (ip->protocol == PROTO_TCP) {
         tcp = (void *)ip + sizeof(struct iphdr);
         if ((void *)tcp + sizeof(struct tcphdr) > data_end) {
             return TC_ACT_OK;
         }
         source_port = bpf_ntohs(tcp->source);
         dest_port = bpf_ntohs(tcp->dest);
-    } else if (ip->protocol == PROTO_UDP) {
+    } else*/ if (ip->protocol == PROTO_UDP) {
         udp = (void *)ip + sizeof(struct iphdr);
         if ((void *)udp + sizeof(struct udphdr) > data_end) {
             return TC_ACT_OK;
@@ -116,23 +116,23 @@ int proxy_egress(struct __sk_buff *skb)
 
     //Checksum differences
     __u64 sum = bpf_csum_diff((void *)&old_address, sizeof(old_address), (void *)&ip->addrs.daddr, sizeof(ip->addrs.daddr), 0);
-    __u64 sum1;
-    if (tcp) {
+    __u64 sum1 = 0;
+    /*if (tcp) {
         unsigned short old_port = tcp->dest;
         tcp->dest = bpf_htons(mapped->port);
         sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&tcp->dest, sizeof(tcp->dest), 0);
-    } else if (udp) {
+    } else if (udp) {*/
         unsigned short old_port = udp->dest;
         udp->dest = bpf_htons(mapped->port);
         sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&udp->dest, sizeof(udp->dest), 0);
-    }
+    /*}*/
     //Update the checksums
     bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, sum, 0);
-    if (tcp) {
+    /*if (tcp) {
         bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), 0, sum + sum1, 0);
-    } else if (udp) {
+    } else if (udp) {*/
         bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), 0, sum + sum1, 0);
-    }
+    /*}*/
 
     //And redirect
     bpf_redirect(skb->ifindex, 0);
@@ -149,7 +149,7 @@ int proxy_ingress(struct __sk_buff *skb)
     void *data = (void *)(__u64)skb->data;
     struct ethhdr *eth;
     struct iphdr *ip;
-    struct tcphdr *tcp;
+    //struct tcphdr *tcp;
     struct udphdr *udp;
 
     if (skb->protocol != bpf_htons(ETH_P_IP))
@@ -166,17 +166,17 @@ int proxy_ingress(struct __sk_buff *skb)
     __u32 source = bpf_ntohl(ip->addrs.saddr);
     __u32 dest = bpf_ntohl(ip->addrs.daddr);
 
-    //extract the port from tcp or ip headers
+    //extract the port from tcp or udp headers
     __u16 source_port;
     __u16 dest_port;
-    if (ip->protocol == PROTO_TCP) {
+    /*if (ip->protocol == PROTO_TCP) {
         struct tcphdr *tcp = (void *)ip + sizeof(struct iphdr);
         if ((void *)tcp + sizeof(struct tcphdr) > data_end) {
             return TC_ACT_OK;
         }
         source_port = bpf_ntohs(tcp->source);
         dest_port = bpf_ntohs(tcp->dest);
-    } else if (ip->protocol == PROTO_UDP) {
+    } else*/ if (ip->protocol == PROTO_UDP) {
         struct udphdr *udp = (void *)ip + sizeof(struct iphdr);
         if ((void *)udp + sizeof(struct udphdr) > data_end) {
             return TC_ACT_OK;
@@ -219,24 +219,23 @@ int proxy_ingress(struct __sk_buff *skb)
     ip->addrs.saddr = bpf_htonl(mapped->address);
     //Checksum differences
     __u64 sum = bpf_csum_diff((void *)&old_address, sizeof(old_address), (void *)&ip->addrs.saddr, sizeof(ip->addrs.saddr), 0);
-    __u64 sum1;
-    if (tcp) {
-        bollocks
+    __u64 sum1 = 0;
+    /*if (tcp) {
         unsigned short old_port = tcp->source;
         tcp->source = bpf_htons(mapped->port);
         sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&tcp->source, sizeof(tcp->source), 0);
-    } else if (udp) {
+    } else if (udp) {*/
         unsigned short old_port = udp->source;
         udp->source = bpf_htons(mapped->port);
         sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&udp->source, sizeof(udp->source), 0);
-    }
+    /*}*/
     //Update the checksums
     bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, sum, 0);
-    if (tcp) {
+    /*if (tcp) {
         bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), 0, sum + sum1, 0);
-    } else if (udp) {
+    } else if (udp) {*/
         bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), 0, sum + sum1, 0);
-    }
+    /*}*/
 
     //And redirect
     bpf_redirect(skb->ifindex, 0);
