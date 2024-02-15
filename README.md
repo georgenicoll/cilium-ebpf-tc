@@ -37,13 +37,16 @@ extension points.
 
 The egress program (proxy_egress) checks an epf map (set up by the user space program) when it receives a packet.  The ebpf map
 contains entries from egress destination (ipv4)address/port to proxied address/port.  If an entry is found for the packet's
-destination address/port, then the address/port in the the packet is updated to the proxied address/port and an entry is pushed  into the ingress map to allow correct routing of packets back from the proxy.
+destination address/port, then the address/port in the the packet is updated to the proxied address/port and an entry is pushed
+into the ingress map to allow correct routing of packets back from the proxy.
 
 The ingress program (proxy_ingress) looks for an entry matching the packet's source address/port and destination address/port and
-updates the incoming packet's source address/port to make it look like it came from the original destination address/port if one is found.
+updates the incoming packet's source address/port to make it look like it came from the original destination address/port if one
+is found.
 
-User space code [proxy/main.go](proxy/main.go) installs a qdisc and the epbf programs as egress and ingress
-tc filters accordingly.
+User space code [proxy/main.go](proxy/main.go) installs a qdisc, installs both egress and ingress epbf programs as direct action filters
+and registers an egress mapping (currently the code add a mapping from 10.0.0.10:12345 to 10.0.0.138:23456 see
+[proxy/main.go](proxy/main.go#L105)).
 
 ### Running
 

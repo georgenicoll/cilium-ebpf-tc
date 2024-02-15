@@ -61,12 +61,10 @@ func main() {
 		QdiscAttrs: qdiscAttrs,
 		QdiscType:  "clsact",
 	}
-
 	// add the qdisc
 	if err := netlink.QdiscAdd(qdisc); err != nil {
 		log.Fatalf("cannot add clsact egress qdisc: %v", err)
 	}
-
 	//filter attributes
 	egressFilterAttrs := netlink.FilterAttrs{
 		LinkIndex: intf.Attrs().Index,
@@ -82,7 +80,6 @@ func main() {
 		Protocol:  unix.ETH_P_ALL,
 		Priority:  1,
 	}
-
 	//declare the BPF filters
 	egressFilter := &netlink.BpfFilter{
 		FilterAttrs:  egressFilterAttrs,
@@ -96,7 +93,6 @@ func main() {
 		Name:         "ingress-tc",
 		DirectAction: true,
 	}
-
 	//add the filters
 	if err := netlink.FilterAdd(egressFilter); err != nil {
 		log.Fatalf("cannot attach bpf object to egress filter: %v", err)
@@ -107,7 +103,7 @@ func main() {
 
 	//set up the egress mapping
 	destKey := tcPacketkey{
-		Address: IP4toInt(10, 0, 0, 138),
+		Address: IP4toInt(10, 0, 0, 10),
 		Port:    12345,
 	}
 	forwardingKey := tcPacketkey{

@@ -103,7 +103,7 @@ int proxy_egress(struct __sk_buff *skb)
     char debug_str2[] = "egress mapped pkt: %u %u";
     bpf_trace_printk(debug_str2, sizeof(debug_str2), dest_key.address, dest_key.port);
 
-    //add ingress mapping
+    //add ingress mapping (opposite way round)
     struct source_dest_key incoming_key = {
         .source = *mapped,
         .dest = source_key,
@@ -114,22 +114,21 @@ int proxy_egress(struct __sk_buff *skb)
     unsigned int old_address = ip->addrs.daddr;
     ip->addrs.daddr = bpf_htonl(mapped->address);
     //Update the checksums
-    __s64 sum = bpf_csum_diff((void *)&old_address, sizeof(old_address), (void *)&ip->addrs.daddr, sizeof(ip->addrs.daddr), 0);
     if (tcp) {
         unsigned short old_port = tcp->dest;
-        tcp->dest = bpf_htons(mapped->port);
-        __s64 sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&tcp->dest, sizeof(tcp->dest), 0);
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, sum, 0);
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), 0, sum + sum1, 0);
+        unsigned short new_port = bpf_htons(mapped->port);
+        tcp->dest = new_port;
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.daddr, sizeof(old_address));
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), old_port, new_port, sizeof(old_port));
     } else if (udp) {
         unsigned short old_port = udp->dest;
-        udp->dest = bpf_htons(mapped->port);
-        __s64 sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&udp->dest, sizeof(udp->dest), 0);
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, sum, 0);
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), 0, sum + sum1, 0);
+        unsigned short new_port = bpf_htons(mapped->port);
+        udp->dest = new_port;
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.daddr, sizeof(old_address));
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), old_port, new_port, sizeof(old_port));
     }
 
-    //And redirect
+    // //And redirect
     bpf_redirect(skb->ifindex, 0);
     return TC_ACT_OK;
 
@@ -169,15 +168,15 @@ int proxy_ingress(struct __sk_buff *skb)
         if ((void *)tcp + sizeof(struct tcphdr) > data_end) {
             return TC_ACT_OK;
         }
-        source_port = tcp->source;
-        dest_port = tcp->dest;
+        source_port = bpf_ntohs(tcp->source);
+        dest_port = bpf_ntohs(tcp->dest);
     } else if (ip->protocol == PROTO_UDP) {
         udp = (void *)ip + sizeof(struct iphdr);
         if ((void *)udp + sizeof(struct udphdr) > data_end) {
             return TC_ACT_OK;
         }
-        source_port = udp->source;
-        dest_port = udp->dest;
+        source_port = bpf_ntohs(udp->source);
+        dest_port = bpf_ntohs(udp->dest);
     } else {
         return TC_ACT_OK;
     }
@@ -201,37 +200,38 @@ int proxy_ingress(struct __sk_buff *skb)
 
     struct packetkey *mapped = bpf_map_lookup_elem(&ingress_mapping, &incoming_keys);
     if (!mapped) {
-        // char debug_str3[] = "ingress no match: %u %u";
-        // bpf_trace_printk(debug_str3, sizeof(debug_str3), source_key.address, source_key.port);
+        // char debug_str4[] = "ingress no match: %u %u";
+        // bpf_trace_printk(debug_str4, sizeof(debug_str4), source_key.address, source_key.port);
         return TC_ACT_OK;
     };
 
-    char debug_str2[] = "ingress mapped pkt: %u %u";
+    char debug_str2[] = "ingress mapped pkt from: %u %u";
     bpf_trace_printk(debug_str2, sizeof(debug_str2), source_key.address, source_key.port);
+    char debug_str3[] = "ingress mapped pkt to: %u %u";
+    bpf_trace_printk(debug_str3, sizeof(debug_str3), mapped->address, mapped->port);
 
     //Update the packet with the new source
     unsigned int old_address = ip->addrs.saddr;
     ip->addrs.saddr = bpf_htonl(mapped->address);
     //Update the checksums
-    __s64 sum = bpf_csum_diff((void *)&old_address, sizeof(old_address), (void *)&ip->addrs.saddr, sizeof(ip->addrs.saddr), 0);
     if (tcp) {
         unsigned short old_port = tcp->source;
-        tcp->source = bpf_htons(mapped->port);
-        __s64 sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&tcp->source, sizeof(tcp->source), 0);
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, sum, 0);
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), 0, sum + sum1, 0);
+        unsigned short new_port = bpf_htons(mapped->port);
+        tcp->source = new_port;
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.saddr, sizeof(old_address));
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), old_port, new_port, sizeof(old_port));
     } else if (udp) {
         unsigned short old_port = udp->source;
-        udp->source = bpf_htons(mapped->port);
-        __s64 sum1 = bpf_csum_diff((void *)&old_port, sizeof(old_port), (void *)&udp->source, sizeof(udp->source), 0);
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, sum, 0);
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), 0, sum + sum1, 0);
+        unsigned short new_port = bpf_htons(mapped->port);
+        udp->source = new_port;
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.saddr, sizeof(old_address));
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), old_port, new_port, sizeof(old_port));
     } else {
         return TC_ACT_OK;
     }
 
-    //And redirect
-    bpf_redirect(skb->ifindex, 0);
+    // //And redirect
+    bpf_redirect(skb->ifindex, BPF_F_INGRESS);
     return TC_ACT_OK;
 
     // bpf_clone_redirect(skb, skb->ifindex, BPF_F_INGRESS);
