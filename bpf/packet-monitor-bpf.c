@@ -25,8 +25,8 @@ struct {
     __uint(max_entries, 1000);
 } pkt_count SEC(".maps");
 
-SEC("tc_prog")
-int tc_main(struct __sk_buff *skb)
+SEC("tc_packet_mon")
+int packet_mon_main(struct __sk_buff *skb)
 {
     void *data_end = (void *)(__u64)skb->data_end;
     void *data = (void *)(__u64)skb->data;
