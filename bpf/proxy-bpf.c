@@ -114,18 +114,19 @@ int proxy_egress(struct __sk_buff *skb)
     unsigned int old_address = ip->addrs.daddr;
     ip->addrs.daddr = bpf_htonl(mapped->address);
     //Update the checksums
+    signed long long ip_diff = bpf_csum_diff(&old_address, sizeof(old_address), &ip->addrs.daddr, sizeof(ip->addrs.daddr), 0);
     if (tcp) {
         unsigned short old_port = tcp->dest;
-        unsigned short new_port = bpf_htons(mapped->port);
-        tcp->dest = new_port;
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.daddr, sizeof(old_address));
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), old_port, new_port, sizeof(old_port));
+        tcp->dest = bpf_htons(mapped->port);
+        signed long long tcp_diff = bpf_csum_diff(&old_port, sizeof(old_port), &tcp->dest, sizeof(tcp->dest), 0);
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, ip_diff, 0);
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), 0, ip_diff + tcp_diff, BPF_F_PSEUDO_HDR);
     } else if (udp) {
         unsigned short old_port = udp->dest;
-        unsigned short new_port = bpf_htons(mapped->port);
-        udp->dest = new_port;
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.daddr, sizeof(old_address));
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), old_port, new_port, sizeof(old_port));
+        udp->dest = bpf_htons(mapped->port);
+        signed long long udp_diff = bpf_csum_diff(&old_port, sizeof(old_port), &udp->dest, sizeof(udp->dest), 0);
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , 0, ip_diff, 0);
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), 0, ip_diff + udp_diff,  BPF_F_PSEUDO_HDR);
     }
 
     // //And redirect
@@ -214,18 +215,19 @@ int proxy_ingress(struct __sk_buff *skb)
     unsigned int old_address = ip->addrs.saddr;
     ip->addrs.saddr = bpf_htonl(mapped->address);
     //Update the checksums
+    signed long long ip_diff = bpf_csum_diff(&old_address, sizeof(old_address), &ip->addrs.saddr, sizeof(ip->addrs.saddr), 0);
     if (tcp) {
         unsigned short old_port = tcp->source;
-        unsigned short new_port = bpf_htons(mapped->port);
-        tcp->source = new_port;
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.saddr, sizeof(old_address));
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), old_port, new_port, sizeof(old_port));
+        tcp->source = bpf_htons(mapped->port);
+        signed long long tcp_diff = bpf_csum_diff(&old_port, sizeof(old_port), &tcp->source, sizeof(tcp->source), 0);
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), 0, ip_diff, 0);
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check), 0, ip_diff + tcp_diff, BPF_F_PSEUDO_HDR);
     } else if (udp) {
         unsigned short old_port = udp->source;
-        unsigned short new_port = bpf_htons(mapped->port);
-        udp->source = new_port;
-        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check) , old_address, ip->addrs.saddr, sizeof(old_address));
-        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), old_port, new_port, sizeof(old_port));
+        udp->source = bpf_htons(mapped->port);
+        signed long long udp_diff = bpf_csum_diff(&old_port, sizeof(old_port), &udp->source, sizeof(udp->source), 0);
+        bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), 0, ip_diff, 0);
+        bpf_l4_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check), 0, ip_diff + udp_diff, BPF_F_PSEUDO_HDR);
     } else {
         return TC_ACT_OK;
     }
